@@ -1,0 +1,50 @@
+---
+title: "HW_3"
+author: "Amie Thomas"
+date: "2024-03-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+
+```{r}
+#load in data
+data <- read.csv("nhanes_bmi.csv")
+
+#split 
+set.seed(592)
+nuisance_indices <- sample(nrow(data), size = nrow(data) / 2)
+nuisance <- data[nuisance_indices, ]
+effect <- data[-nuisance_indices, ]
+
+#split into treatment and control
+nu_treatment <- nuisance[nuisance$School_meal == 1, ]
+nu_control <- nuisance[nuisance$School_meal == 0, ]
+
+#regression
+reg_0<- lm(BMI ~ .-BMI -School_meal, nu_control)
+reg_1 <- lm(BMI ~ .-BMI -School_meal, nu_treatment)
+
+#get mu's
+mu_0 <- predict(reg_0, data = effect)
+mu_1 <- predict(reg_1, data = effect)
+
+A <- effect$School_meal
+E1 = (1/2)
+E0 = (1/1.7)
+
+#sensitivity analysis ATE
+a <- mean(A*mu_1)
+b <- mean((1-A)*(mu_1/E1))
+c <- mean(A*mu_0*E0)
+d <- mean((1-A)*mu_0)
+
+ate <- a+b-c-d
+
+
+```
