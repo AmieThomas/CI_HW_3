@@ -27,24 +27,62 @@ nu_treatment <- nuisance[nuisance$School_meal == 1, ]
 nu_control <- nuisance[nuisance$School_meal == 0, ]
 
 #regression
-reg_0<- lm(BMI ~ .-BMI -School_meal, nu_control)
-reg_1 <- lm(BMI ~ .-BMI -School_meal, nu_treatment)
+reg_0<- lm(BMI ~ .-BMI -School_meal -X, nu_control)
+reg_1 <- lm(BMI ~ .-BMI -School_meal -X, nu_treatment)
 
 #get mu's
 mu_0 <- predict(reg_0, data = effect)
 mu_1 <- predict(reg_1, data = effect)
 
 A <- effect$School_meal
-E1 = (1/2)
-E0 = (1/1.7)
+# E1 = (1/2)
+# E0 = (1/1.7)
+# 
+# #sensitivity analysis ATE
+# a <- mean(A*mu_1)
+# b <- mean((1-A)*(mu_1/E1))
+# c <- mean(A*mu_0*E0)
+# d <- mean((1-A)*mu_0)
+# 
+# ate <- a+b-c-d
+#bootstrap 
+# 
+# numbers1 <- c(1/2, 1/1.7, 1/1.5, 1/1.3, 1, 1.3, 1.5, 1.7, 2)
+# numbers2 <- c(1/2, 1/1.7, 1/1.5, 1/1.3, 1, 1.3, 1.5, 1.7, 2)
+# pairs <- expand.grid(numbers1, numbers2)
 
-#sensitivity analysis ATE
-a <- mean(A*mu_1)
-b <- mean((1-A)*(mu_1/E1))
-c <- mean(A*mu_0*E0)
-d <- mean((1-A)*mu_0)
+#iterate through all of the combinations with all of the bootstrap function
+#function should get the ate
 
-ate <- a+b-c-d
 
+calculate_ate <- function(numbers1, numbers2) {
+  # Create all combination pairs
+  pairs <- expand.grid(numbers1, numbers2)
+  
+  # Initialize empty vector to store ATE for each pair
+  ate_values <- numeric(nrow(pairs))
+  
+  # Iterate through each pair
+  for (i in seq_len(nrow(pairs))) {
+    E0 <- pairs[i, 1]
+    E1 <- pairs[i, 2]
+    
+    # Calculate individual terms
+    a <- mean(A * mu_1)
+    b <- mean((1 - A) * (mu_1 / E1))
+    c <- mean(A * mu_0 * E0)
+    d <- mean((1 - A) * mu_0)
+    
+    # Calculate ATE for this pair
+    ate_values[i] <- a + b - c - d
+  }
+  
+  # Return vector of ATE values for each pair
+  return(ate_values)
+}
+
+#run the boostrap function in the combination
+#2 functions a function in a function
+#regression and mu in bootstrap function
 
 ```
