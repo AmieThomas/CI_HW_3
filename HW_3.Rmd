@@ -7,82 +7,103 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
-library(tidyverse)
 ```
 
 
 ```{r}
 #load in data
 data <- read.csv("nhanes_bmi.csv")
+```
 
-#split 
+
+```{r, warning=FALSE, echo = FALSE}
 set.seed(592)
-nuisance_indices <- sample(nrow(data), size = nrow(data) / 2)
-nuisance <- data[nuisance_indices, ]
-effect <- data[-nuisance_indices, ]
 
-#split into treatment and control
-nu_treatment <- nuisance[nuisance$School_meal == 1, ]
-nu_control <- nuisance[nuisance$School_meal == 0, ]
+# Define the grid of values
+numbers1 <- c(1/2, 1/1.7, 1/1.5, 1/1.3, 1, 1.3, 1.5, 1.7, 2)
+numbers2 <- c(1/2, 1/1.7, 1/1.5, 1/1.3, 1, 1.3, 1.5, 1.7, 2)
+pairs_grid <- expand.grid(numbers1, numbers2)
 
-#regression
-reg_0<- lm(BMI ~ .-BMI -School_meal -X, nu_control)
-reg_1 <- lm(BMI ~ .-BMI -School_meal -X, nu_treatment)
+# Define the number of bootstrap iterations
+bootstraps_n <- 100
 
-#get mu's
-mu_0 <- predict(reg_0, data = effect)
-mu_1 <- predict(reg_1, data = effect)
+# Initialize vector to store results
+mean_results <- numeric(nrow(pairs_grid))
+se_results <- numeric(nrow(pairs_grid))
+ci_results <- matrix(NA, nrow(pairs_grid), 2)
 
-A <- effect$School_meal
-# E1 = (1/2)
-# E0 = (1/1.7)
-# 
-# #sensitivity analysis ATE
-# a <- mean(A*mu_1)
-# b <- mean((1-A)*(mu_1/E1))
-# c <- mean(A*mu_0*E0)
-# d <- mean((1-A)*mu_0)
-# 
-# ate <- a+b-c-d
-#bootstrap 
-# 
-# numbers1 <- c(1/2, 1/1.7, 1/1.5, 1/1.3, 1, 1.3, 1.5, 1.7, 2)
-# numbers2 <- c(1/2, 1/1.7, 1/1.5, 1/1.3, 1, 1.3, 1.5, 1.7, 2)
-# pairs <- expand.grid(numbers1, numbers2)
-
-#iterate through all of the combinations with all of the bootstrap function
-#function should get the ate
-
-
-calculate_ate <- function(numbers1, numbers2) {
-  # Create all combination pairs
-  pairs <- expand.grid(numbers1, numbers2)
-  
-  # Initialize empty vector to store ATE for each pair
-  ate_values <- numeric(nrow(pairs))
-  
-  # Iterate through each pair
-  for (i in seq_len(nrow(pairs))) {
-    E0 <- pairs[i, 1]
-    E1 <- pairs[i, 2]
+# Perform bootstrap iterations
+for (idx in seq_len(nrow(pairs_grid))) {
+  ate_values <- numeric(bootstraps_n)
+  for (j in seq_len(bootstraps_n)) {
+    # Sample nuisance and effect data
+    nuisance_indices <- sample(nrow(data), size = nrow(data) / 2)
+    nuisance <- data[nuisance_indices, ]
+    effect <- data[-nuisance_indices, ]
+    
+    # Split into treatment and control
+    nu_treatment <- nuisance[nuisance$School_meal == 1, ]
+    nu_control <- nuisance[nuisance$School_meal == 0, ]
+    
+    # Regression
+    reg_0 <- lm(BMI ~ .-BMI -School_meal -X, data = nu_control)
+    reg_1 <- lm(BMI ~ .-BMI -School_meal -X, data = nu_treatment)
+    
+    # Get mu's
+    mu_0 <- predict(reg_0, data = effect)
+    mu_1 <- predict(reg_1, data = effect)
+    
+    # Define E0 and E1
+    E0 <- pairs_grid[idx, 1]
+    E1 <- pairs_grid[idx, 2]
     
     # Calculate individual terms
-    a <- mean(A * mu_1)
-    b <- mean((1 - A) * (mu_1 / E1))
-    c <- mean(A * mu_0 * E0)
-    d <- mean((1 - A) * mu_0)
+    a <- mean(effect$School_meal * mu_1)
+    b <- mean((1 - effect$School_meal) * (mu_1 / E1))
+    c <- mean(effect$School_meal * mu_0 * E0)
+    d <- mean((1 - effect$School_meal) * mu_0)
     
     # Calculate ATE for this pair
-    ate_values[i] <- a + b - c - d
+    ate_values[j] <- a + b - c - d
   }
   
-  # Return vector of ATE values for each pair
-  return(ate_values)
+  # Store the mean ATE for this pair
+  mean_results[idx] <- mean(ate_values)
+  
+  # Calculate standard error
+  se_results[idx] <- sd(ate_values) / sqrt(bootstraps_n)
+  
+  # Calculate confidence intervals
+  ci_results[idx, ] <- quantile(ate_values, c(0.025, 0.975))
 }
 
-#run the boostrap function in the combination
-#2 functions a function in a function
-#regression and mu in bootstrap function
+# Return the mean results
+mean_results
+
+```
+
+```{r}
+
+
+# Standard errors table
+se_matrix <- matrix(se_results, nrow = 9, byrow = TRUE)
+se_df <- data.frame(se_matrix)
+colnames(se_df) <- numbers2
+rownames(se_df) <- numbers1
+
+cat("Standard Errors:\n")
+print(se_df)
+
+#confidence intervals
+ci_matrix_lower <- matrix(ci_results[, 1], nrow = 9, byrow = TRUE)
+ci_matrix_upper <- matrix(ci_results[, 2], nrow = 9, byrow = TRUE)
+ci_df <- data.frame(CI_Lower = c(ci_matrix_lower), CI_Upper = c(ci_matrix_upper))
+colnames(ci_df) <- c("CI_Lower", "CI_Upper")
+
+row_names <- as.character(outer(1:9, 1:9, FUN = paste, sep = "_"))
+rownames(ci_df) <- row_names
+
+cat("Confidence Intervals:\n")
+print(ci_df)
 
 ```
